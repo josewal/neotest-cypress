@@ -27,8 +27,9 @@ describe("init adapter", function()
     }
     local spec = adapter.build_spec({ tree = mock_tree })
     assert.is_table(spec)
-    assert.is_string(spec.command)
-    assert.is_table(spec.args)
+    assert.is_table(spec.command)  -- command should be a string array
+    assert.equals("npx", spec.command[1])
+    assert.equals("cypress", spec.command[2])
     assert.is_table(spec.context)
     assert.equals("tests/fixtures/basic.cy.ts", spec.context.file)
   end)
