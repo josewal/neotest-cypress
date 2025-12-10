@@ -1,0 +1,23 @@
+local cfg = require("neotest-cypress.config")
+
+describe("config", function()
+  it("should have default values", function()
+    assert.is_not_nil(cfg.defaults)
+    assert.equals("cypress.config.ts", cfg.defaults.cypress_config_path)
+    assert.equals("npx cypress", cfg.defaults.cypress_cmd)
+    assert.same({ "--headless" }, cfg.defaults.args)
+  end)
+
+  it("should merge user config with defaults", function()
+    local merged = cfg.setup({ cypress_config_path = "custom.config.ts" })
+    assert.is_not_nil(merged)
+    assert.equals("custom.config.ts", merged.cypress_config_path)
+    assert.equals("npx cypress", merged.cypress_cmd)
+  end)
+  
+  it("should handle empty user config", function()
+    local merged = cfg.setup()
+    assert.equals("cypress.config.ts", merged.cypress_config_path)
+    assert.equals("npx cypress", merged.cypress_cmd)
+  end)
+end)
