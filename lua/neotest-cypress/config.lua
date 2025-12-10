@@ -5,6 +5,22 @@ M.defaults = {
   cypress_config_path = "cypress.config.ts",
   cypress_cmd = "npx cypress",
   args = { "--headless" },
+  -- Include patterns for test files
+  include = {
+    "**/*.cy.ts",
+    "**/*.cy.tsx", 
+    "**/*.cy.js",
+    "**/*.cy.jsx"
+  },
+  -- Exclude patterns for directories and files
+  exclude = {
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/dist/**",
+    "**/build/**"
+  },
+  -- Log level: "OFF", "ERROR", "WARN", "INFO", "DEBUG"
+  log_level = "WARN"
 }
 
 -- Merge user config with defaults

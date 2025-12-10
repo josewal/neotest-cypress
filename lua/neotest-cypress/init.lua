@@ -1,85 +1,109 @@
 local vim = vim
----@type neotest.Position, neotest.Tree, neotest.RunSpec
+---@type neotest.lib
 local lib = require("neotest.lib")
 local results_parser = require("neotest-cypress.results")
 local util = require("neotest-cypress.util")
+local config = require("neotest-cypress.config")
 require("neotest-cypress.types")
 
 local M = {}
 
 M.name = "neotest-cypress"
 
+-- Configuration
+local current_config = config.defaults
+
 -- Find the project root by locating cypress.config.ts/js or package.json
 ---@param dir string
 ---@return string|nil
 function M.root(dir)
-  return util.safe_call(function()
-    util.log("Searching for project root in: " .. tostring(dir), "DEBUG")
-    local root_path = lib.files.match_root_pattern("cypress.config.ts", "cypress.config.js", "package.json")(dir)
-    util.log("Found project root: " .. tostring(root_path), "DEBUG")
-    return root_path
-  end)
+  -- Set log level from config
+  if current_config.log_level then
+    util.set_log_level(current_config.log_level)
+  end
+  
+  util.log("Searching for project root in: " .. tostring(dir), "DEBUG")
+  
+  -- Try to find the project root by searching up the directory tree
+  local root_path = lib.files.match_root_pattern(
+    "cypress.config.ts", 
+    "cypress.config.js", 
+    "package.json"
+  )(dir)
+  
+  util.log("Found project root: " .. tostring(root_path), "DEBUG")
+  return root_path
 end
 
 -- Identify Cypress test files by pattern *.cy.{ts,tsx,js,jsx}
 ---@param file_path string
 ---@return boolean
 function M.is_test_file(file_path)
-  return util.safe_call(function()
-    if not file_path then
-      util.log("File path is nil", "DEBUG")
-      return false
-    end
-    
-    local is_cypress_test = 
-      vim.endswith(file_path, ".cy.ts") or
-      vim.endswith(file_path, ".cy.tsx") or
-      vim.endswith(file_path, ".cy.js") or
-      vim.endswith(file_path, ".cy.jsx")
-    
+  if not file_path then
+    return false
+  end
+  
+  -- Check if file matches Cypress test patterns
+  local is_cypress_test = 
+    vim.endswith(file_path, ".cy.ts") or
+    vim.endswith(file_path, ".cy.tsx") or
+    vim.endswith(file_path, ".cy.js") or
+    vim.endswith(file_path, ".cy.jsx")
+  
+  -- Only log when it's actually a test file to reduce noise
+  if is_cypress_test then
     util.log({file_path = file_path, is_cypress_test = is_cypress_test}, "DEBUG")
-    return is_cypress_test
-  end)
+  end
+  
+  return is_cypress_test
 end
 
 -- Filter out directories that should not be searched
 ---@param name string
 ---@return boolean
 function M.filter_dir(name)
-  return util.safe_call(function()
-    local filtered = name ~= "node_modules" and 
-                     name ~= ".git" and 
-                     name ~= "dist" and 
-                     name ~= "build"
-    
+  local filtered = name ~= "node_modules" and 
+                   name ~= ".git" and 
+                   name ~= "dist" and 
+                   name ~= "build"
+  
+  -- Reduce logging verbosity - only log when filtering out directories
+  if not filtered then
     util.log({dir = name, filtered = filtered}, "DEBUG")
-    return filtered
-  end)
+  end
+  
+  return filtered
 end
 
 -- Discover test positions using treesitter
 ---@param file_path string
 ---@return neotest.Position[]
 function M.discover_positions(file_path)
-  return util.safe_call(function()
-    util.log("Discovering positions for: " .. tostring(file_path), "DEBUG")
-    
-    local query = lib.treesitter.parse_positions(file_path, {
-      nested_namespaces = true,
-      require_namespaces = false,
-      position_id = function(file, names)
-        return require('neotest-cypress.util').create_position_id(file, names)
-      end,
-    })
-    
-    if not query then
-      util.log("Falling back to default position parsing", "WARN")
-      query = lib.positions.parse_tree(lib.files.read(file_path))
-    end
-    
-    util.log("Discovered positions", "DEBUG")
-    return query or {}
+  util.log("Discovering positions for: " .. tostring(file_path), "DEBUG")
+  
+  -- Try to parse positions with treesitter
+  local success, positions = pcall(function()
+    return lib.treesitter.parse_positions(
+      file_path,
+      {
+        nested_namespaces = true,
+        require_namespaces = false,
+      },
+      {
+        position_id = function(file, names)
+          return require('neotest-cypress.util').create_position_id(file, names)
+        end,
+      }
+    )
   end)
+  
+  if not success or not positions then
+    util.log("Error in treesitter parsing, falling back to default position parsing", "WARN")
+    positions = lib.positions.parse_tree(lib.files.read(file_path))
+  end
+  
+  util.log("Discovered positions", "DEBUG")
+  return positions or {}
 end
 
 -- Build the Cypress command to execute tests
@@ -147,11 +171,21 @@ function M.results(spec, result, tree)
   end)
 end
 
--- Optional: Add a debug mode toggle
----@param opts? {debug: boolean}
+-- Setup function to configure the adapter
+---@param opts? table
 function M.setup(opts)
   opts = opts or {}
-  util.set_debug_mode(opts.debug or false)
+  current_config = config.setup(opts)
+  
+  -- Set log level
+  if current_config.log_level then
+    util.set_log_level(current_config.log_level)
+  end
+  
+  -- Set debug mode if specified
+  if opts.debug ~= nil then
+    util.set_debug_mode(opts.debug)
+  end
 end
 
 return M
