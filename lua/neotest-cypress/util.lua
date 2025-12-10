@@ -1,4 +1,33 @@
+local vim = vim
 local M = {}
+
+-- Debug logging function
+function M.log(msg, level)
+  level = level or 'INFO'
+  local log_file = vim.fn.stdpath('data') .. '/neocy_debug.log'
+  local timestamp = os.date('%Y-%m-%d %H:%M:%S')
+  
+  local f = io.open(log_file, 'a')
+  if f then
+    f:write(string.format("[%s] %s: %s\n", level, timestamp, vim.inspect(msg)))
+    f:close()
+  end
+  
+  -- Also use vim.print for immediate visibility if in debug mode
+  if vim.g.neocy_debug_mode then
+    vim.print(string.format("[%s] %s", level, msg))
+  end
+end
+
+-- Safe function wrapper with error logging
+function M.safe_call(func, ...)
+  local success, result_or_error = pcall(func, ...)
+  if not success then
+    M.log(string.format("Error: %s", tostring(result_or_error)), 'ERROR')
+    error(result_or_error)
+  end
+  return result_or_error
+end
 
 -- Generate a position ID from file path and test path
 -- Format: file_path::describe_name::nested_describe::test_name
@@ -24,6 +53,12 @@ function M.get_namespace_path(pos_id)
     table.insert(namespaces, parts[i])
   end
   return namespaces
+end
+
+-- Enable or disable debug mode
+function M.set_debug_mode(enabled)
+  vim.g.neocy_debug_mode = enabled == true
+  M.log(string.format("Debug mode %s", enabled and 'enabled' or 'disabled'))
 end
 
 return M
