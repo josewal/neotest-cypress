@@ -79,10 +79,11 @@ function M.parse(results_path, file_path)
       errors = extract_errors(test)
     end
 
-    results[pos_id] = {
+results[pos_id] = {
       status = status,
       errors = errors,
       short = test.err and test.err.message or nil,
+      output = (test.err and test.err.stack) or "",
     }
   end
 
