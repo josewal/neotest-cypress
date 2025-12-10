@@ -160,9 +160,13 @@ function M.build_spec(args)
   return util.safe_call(function()
     local position = args.tree:data()
 
+    -- Find the project root directory
+    local cwd = M.root(position.path)
+
     pp("build_spec", {
       spec = position.path,
-      position_id = position.id
+      position_id = position.id,
+      cwd = cwd
     })
 
     -- Use json reporter which outputs to stdout
@@ -182,6 +186,7 @@ function M.build_spec(args)
 
     return {
       command = command,
+      cwd = cwd,
       context = {
         pos_id = position.id,
         file = position.path,
