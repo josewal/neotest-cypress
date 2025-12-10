@@ -30,6 +30,7 @@ describe("init adapter", function()
     assert.is_table(spec.command)  -- command should be a string array
     assert.equals("npx", spec.command[1])
     assert.equals("cypress", spec.command[2])
+    assert.is_string(spec.cwd)  -- cwd should be set to project root
     assert.is_table(spec.context)
     assert.equals("tests/fixtures/basic.cy.ts", spec.context.file)
   end)
