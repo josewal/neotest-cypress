@@ -4,7 +4,7 @@ local lib = require("neotest.lib")
 local results_parser = require("neotest-cypress.results")
 local util = require("neotest-cypress.util")
 local config = require("neotest-cypress.config")
-require("neotest-cypress.types")
+require("neotest.types")
 
 -- Debug logging utility using util.log
 local function pp(label, value)
