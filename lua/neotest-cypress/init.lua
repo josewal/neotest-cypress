@@ -33,12 +33,43 @@ function M.root(dir)
 
   pp("root: searching", dir)
 
-  -- Try to find the project root by searching up the directory tree
+  -- First, try to find the project root by searching up the directory tree
   local root_path = lib.files.match_root_pattern(
     "cypress.config.ts",
     "cypress.config.js",
     "package.json"
   )(dir)
+
+  -- If not found by searching up, try searching down for cypress.config files
+  if not root_path then
+    pp("root: not found upward, searching downward", dir)
+    
+    -- Search for cypress.config.ts/js in subdirectories (max 3 levels deep)
+    local handle = vim.loop.fs_scandir(dir)
+    if handle then
+      while true do
+        local name, type = vim.loop.fs_scandir_next(handle)
+        if not name then break end
+        
+        if type == "directory" and name ~= "node_modules" and name ~= ".git" then
+          local subdir = dir .. "/" .. name
+          -- Check if this subdirectory contains a cypress config
+          local cypress_config_ts = subdir .. "/cypress.config.ts"
+          local cypress_config_js = subdir .. "/cypress.config.js"
+          
+          if vim.loop.fs_stat(cypress_config_ts) then
+            root_path = subdir
+            pp("root: found downward (cypress.config.ts)", root_path)
+            break
+          elseif vim.loop.fs_stat(cypress_config_js) then
+            root_path = subdir
+            pp("root: found downward (cypress.config.js)", root_path)
+            break
+          end
+        end
+      end
+    end
+  end
 
   pp("root: found", root_path)
   return root_path
