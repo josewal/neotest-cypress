@@ -1,9 +1,6 @@
 local vim = vim
 local M = {}
 
--- Current log level
-M.log_level = "WARN"
-
 -- Log levels with their numeric values for comparison
 local log_levels = {
   OFF = 0,
@@ -13,12 +10,8 @@ local log_levels = {
   DEBUG = 4
 }
 
--- Set log level
-function M.set_log_level(level)
-  if log_levels[level] then
-    M.log_level = level
-  end
-end
+-- Current log level (set by config)
+M.log_level = "INFO"
 
 -- Debug logging function with level filtering
 function M.log(msg, level)
@@ -75,10 +68,6 @@ function M.get_namespace_path(pos_id)
   return namespaces
 end
 
--- Enable or disable debug mode
-function M.set_debug_mode(enabled)
-  vim.g.neotest_cypress_debug_mode = enabled == true
-  M.log(string.format("Debug mode %s", enabled and 'enabled' or 'disabled'))
-end
+
 
 return M

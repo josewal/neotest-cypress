@@ -20,7 +20,7 @@ M.defaults = {
     "**/build/**"
   },
   -- Log level: "OFF", "ERROR", "WARN", "INFO", "DEBUG"
-  log_level = "WARN"
+  log_level = "INFO"
 }
 
 -- Merge user config with defaults

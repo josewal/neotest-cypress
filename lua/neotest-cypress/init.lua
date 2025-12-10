@@ -26,9 +26,9 @@ local current_config = config.defaults
 ---@param dir string
 ---@return string|nil
 function M.root(dir)
-  -- Set log level from config
+  -- Set log level from config on first call
   if current_config.log_level then
-    util.set_log_level(current_config.log_level)
+    util.log_level = current_config.log_level
   end
 
   pp("root: searching", dir)
@@ -207,20 +207,14 @@ function M.setup(opts)
   opts = opts or {}
   current_config = config.setup(opts)
 
-  pp("setup: configured", {
-    log_level = current_config.log_level,
-    debug = opts.debug or false
-  })
-
-  -- Set log level
+  -- Set log level from config
   if current_config.log_level then
-    util.set_log_level(current_config.log_level)
+    util.log_level = current_config.log_level
   end
 
-  -- Set debug mode if specified
-  if opts.debug ~= nil then
-    util.set_debug_mode(opts.debug)
-  end
+  pp("setup: configured", {
+    log_level = current_config.log_level
+  })
 end
 
 return M
