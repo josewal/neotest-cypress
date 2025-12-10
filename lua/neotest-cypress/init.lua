@@ -100,7 +100,7 @@ end
 
 -- Discover test positions using treesitter
 ---@param file_path string
----@return neotest.Tree
+---@return neotest.Tree | nil
 function M.discover_positions(file_path)
   pp("discover_positions: parsing", file_path)
 
@@ -130,7 +130,7 @@ function M.discover_positions(file_path)
     pp("discover_positions: treesitter found", #positions .. " positions")
   else
     pp("discover_positions: no positions found", file_path)
-    positions = {}
+    return
   end
 
   return positions
@@ -138,7 +138,7 @@ end
 
 -- Build the Cypress command to execute tests
 ---@param args {tree: neotest.Tree}
----@return neotest.RunSpec
+---@return nil | neotest.RunSpec | neotest.RunSpec[]
 function M.build_spec(args)
   return util.safe_call(function()
     local position = args.tree:data()
