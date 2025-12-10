@@ -6,13 +6,26 @@ local util = require("neotest-cypress.util")
 local config = require("neotest-cypress.config")
 require("neotest-cypress.types")
 
--- Pretty print utility for tracing
+-- Pretty print utility for tracing using Noice if available, fallback to vim.notify
 local function pp(label, value)
+  local has_noice, noice = pcall(require, "noice")
+
+  -- Format the message
+  local msg
   if type(value) == "table" then
-    vim.print(string.format("[neocy] %s:", label))
-    vim.print(vim.inspect(value))
+    msg = string.format("%s:\n%s", label, vim.inspect(value))
   else
-    vim.print(string.format("[neocy] %s: %s", label, tostring(value)))
+    msg = string.format("%s: %s", label, tostring(value))
+  end
+
+  -- Use noice if available, otherwise fallback to vim.notify
+  if has_noice and noice then
+    noice.notify(msg, "info", {
+      title = "neocy",
+      timeout = 2000,
+    })
+  else
+    vim.notify(msg, vim.log.levels.INFO, { title = "neocy" })
   end
 end
 
