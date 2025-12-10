@@ -156,14 +156,14 @@ end
 function M.build_spec(args)
   return util.safe_call(function()
     local position = args.tree:data()
-    local results_path = vim.fn.tempname() .. ".json"
 
     pp("build_spec", {
       spec = position.path,
-      results_path = results_path,
       position_id = position.id
     })
 
+    -- Use json reporter which outputs to stdout
+    -- NeoTest captures stdout to result.output which we parse in results()
     return {
       command = "npx",
       args = {
@@ -173,12 +173,9 @@ function M.build_spec(args)
         position.path,
         "--reporter",
         "json",
-        "--reporter-options",
-        "output=" .. results_path,
         "--headless",
       },
       context = {
-        results_path = results_path,
         pos_id = position.id,
         file = position.path,
       },
@@ -193,19 +190,37 @@ end
 ---@return table
 function M.results(spec, result, tree)
   return util.safe_call(function()
-    local results_path = spec.context.results_path
     local file_path = spec.context.file or tree:data().path
 
-    pp("results: parsing output", results_path)
+    pp("results: parsing output", {
+      output_file = result.output,
+      exit_code = result.code
+    })
 
-    if not results_path then
-      pp("results: no results path", "missing")
+    -- NeoTest captures stdout to a file at result.output
+    if not result.output then
+      pp("results: no output file from neotest", "missing")
       return {}
     end
 
-    local parsed_results = results_parser.parse(results_path, file_path)
+    -- Read stdout from the output file that NeoTest created
+    local output_content = lib.files.read(result.output)
+    if not output_content or output_content == "" then
+      pp("results: output file empty or missing", result.output)
+      -- Return failed status for the file if Cypress didn't produce output
+      return {
+        [file_path] = {
+          status = "failed",
+          short = "Cypress did not produce any output",
+          errors = {{
+            message = "Cypress failed to run. Exit code: " .. (result.code or "unknown")
+          }}
+        }
+      }
+    end
+
+    local parsed_results = results_parser.parse_from_output(output_content, file_path)
     pp("results: parsed", {
-      results_path = results_path,
       file_path = file_path,
       result_count = parsed_results and vim.tbl_count(parsed_results) or 0
     })
