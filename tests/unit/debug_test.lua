@@ -1,15 +1,22 @@
--- Debug test to understand the core issue
-print("Debug test for treesitter queries")
+-- Debug test for discovering test positions
+-- Documents the fixes made and tests the pretty print tracing
 
--- Simple test to check if the queries can parse the test files
+print("[NEOCY] Diagnostic test file loaded")
+
+-- Test fixture
 local test_content = [[
 describe("basic test suite", () => {
   it("should pass", () => {
     expect(true).toBe(true);
   });
+
+  describe("nested suite", () => {
+    it("should also pass", () => {
+      cy.visit("/");
+    });
+  });
 });
 ]]
 
-print("Test content loaded")
-print("Would test treesitter parsing here...")
-print("But the real issue is likely in the query parsing")
+print("[NEOCY] Test fixture loaded")
+print("[NEOCY] Pretty print tracing enabled for: root, is_test_file, filter_dir, discover_positions, build_spec, results, setup")

@@ -6,6 +6,16 @@ local util = require("neotest-cypress.util")
 local config = require("neotest-cypress.config")
 require("neotest-cypress.types")
 
+-- Pretty print utility for tracing
+local function pp(label, value)
+  if type(value) == "table" then
+    vim.print(string.format("[neocy] %s:", label))
+    vim.print(vim.inspect(value))
+  else
+    vim.print(string.format("[neocy] %s: %s", label, tostring(value)))
+  end
+end
+
 local M = {}
 
 M.name = "neotest-cypress"
@@ -21,17 +31,17 @@ function M.root(dir)
   if current_config.log_level then
     util.set_log_level(current_config.log_level)
   end
-  
-  util.log("Searching for project root in: " .. tostring(dir), "DEBUG")
-  
+
+  pp("root: searching", dir)
+
   -- Try to find the project root by searching up the directory tree
   local root_path = lib.files.match_root_pattern(
-    "cypress.config.ts", 
-    "cypress.config.js", 
+    "cypress.config.ts",
+    "cypress.config.js",
     "package.json"
   )(dir)
-  
-  util.log("Found project root: " .. tostring(root_path), "DEBUG")
+
+  pp("root: found", root_path)
   return root_path
 end
 
@@ -42,19 +52,19 @@ function M.is_test_file(file_path)
   if not file_path then
     return false
   end
-  
+
   -- Check if file matches Cypress test patterns
-  local is_cypress_test = 
+  local is_cypress_test =
     vim.endswith(file_path, ".cy.ts") or
     vim.endswith(file_path, ".cy.tsx") or
     vim.endswith(file_path, ".cy.js") or
     vim.endswith(file_path, ".cy.jsx")
-  
-  -- Only log when it's actually a test file to reduce noise
+
+  -- Only print when it's actually a test file to reduce noise
   if is_cypress_test then
-    util.log({file_path = file_path, is_cypress_test = is_cypress_test}, "DEBUG")
+    pp("is_test_file", file_path)
   end
-  
+
   return is_cypress_test
 end
 
@@ -62,16 +72,16 @@ end
 ---@param name string
 ---@return boolean
 function M.filter_dir(name)
-  local filtered = name ~= "node_modules" and 
-                   name ~= ".git" and 
-                   name ~= "dist" and 
+  local filtered = name ~= "node_modules" and
+                   name ~= ".git" and
+                   name ~= "dist" and
                    name ~= "build"
-  
-  -- Reduce logging verbosity - only log when filtering out directories
+
+  -- Reduce printing verbosity - only print when filtering out directories
   if not filtered then
-    util.log({dir = name, filtered = filtered}, "DEBUG")
+    pp("filter_dir: excluding", name)
   end
-  
+
   return filtered
 end
 
@@ -79,30 +89,51 @@ end
 ---@param file_path string
 ---@return neotest.Position[]
 function M.discover_positions(file_path)
-  util.log("Discovering positions for: " .. tostring(file_path), "DEBUG")
-  
+  pp("discover_positions: parsing", file_path)
+
   -- Try to parse positions with treesitter
   local success, positions = pcall(function()
-    return lib.treesitter.parse_positions(
+    -- Try the treesitter parsing with file path
+    local parsed = lib.treesitter.parse_positions(
       file_path,
       {
         nested_namespaces = true,
         require_namespaces = false,
-      },
-      {
-        position_id = function(file, names)
-          return require('neotest-cypress.util').create_position_id(file, names)
-        end,
       }
     )
+
+    if parsed and #parsed > 0 then
+      pp("discover_positions: treesitter found", #parsed .. " positions")
+      -- Apply our custom position_id function
+      for _, pos in ipairs(parsed) do
+        if pos.name then
+          -- Update the position ID with our custom format
+          pos.id = util.create_position_id(file_path, {pos.name})
+        end
+      end
+    end
+
+    return parsed
   end)
-  
-  if not success or not positions then
-    util.log("Error in treesitter parsing, falling back to default position parsing", "WARN")
-    positions = lib.positions.parse_tree(lib.files.read(file_path))
+
+  if not success or not positions or #positions == 0 then
+    if not success then
+      pp("discover_positions: treesitter error", positions)
+    end
+    pp("discover_positions: falling back to default parser", file_path)
+
+    -- Try fallback: read the file content and use lib.positions.parse_tree
+    local file_content = lib.files.read(file_path)
+
+    if file_content then
+      positions = lib.positions.parse_tree(file_content)
+      pp("discover_positions: fallback found", #positions .. " positions")
+    else
+      pp("discover_positions: failed to read file", file_path)
+      positions = {}
+    end
   end
-  
-  util.log("Discovered positions", "DEBUG")
+
   return positions or {}
 end
 
@@ -113,13 +144,13 @@ function M.build_spec(args)
   return util.safe_call(function()
     local position = args.tree:data()
     local results_path = vim.fn.tempname() .. ".json"
-    
-    util.log({
-      position_path = position.path,
+
+    pp("build_spec", {
+      spec = position.path,
       results_path = results_path,
       position_id = position.id
-    }, "DEBUG")
-    
+    })
+
     return {
       command = "npx",
       args = {
@@ -152,20 +183,19 @@ function M.results(spec, result, tree)
     local results_path = spec.context.results_path
     local file_path = spec.context.file or tree:data().path
 
-    -- Use the 'result' parameter for future debugging if needed
-    util.log({result = result}, "DEBUG")
+    pp("results: parsing output", results_path)
 
     if not results_path then
-      util.log("No results path provided", "WARN")
+      pp("results: no results path", "missing")
       return {}
     end
 
     local parsed_results = results_parser.parse(results_path, file_path)
-    util.log({
+    pp("results: parsed", {
       results_path = results_path,
-      file_path = file_path, 
-      parsed_results_count = parsed_results and vim.tbl_count(parsed_results) or 0
-    }, "DEBUG")
+      file_path = file_path,
+      result_count = parsed_results and vim.tbl_count(parsed_results) or 0
+    })
 
     return parsed_results or {}
   end)
@@ -176,12 +206,17 @@ end
 function M.setup(opts)
   opts = opts or {}
   current_config = config.setup(opts)
-  
+
+  pp("setup: configured", {
+    log_level = current_config.log_level,
+    debug = opts.debug or false
+  })
+
   -- Set log level
   if current_config.log_level then
     util.set_log_level(current_config.log_level)
   end
-  
+
   -- Set debug mode if specified
   if opts.debug ~= nil then
     util.set_debug_mode(opts.debug)
