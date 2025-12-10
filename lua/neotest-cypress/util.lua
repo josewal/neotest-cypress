@@ -37,11 +37,6 @@ function M.log(msg, level)
     f:write(string.format("[%s] %s: %s\n", level, timestamp, vim.inspect(msg)))
     f:close()
   end
-  
-  -- Also use vim.print for immediate visibility if in debug mode
-  if vim.g.neotest_cypress_debug_mode then
-    vim.print(string.format("[%s] %s", level, msg))
-  end
 end
 
 -- Safe function wrapper with error logging
