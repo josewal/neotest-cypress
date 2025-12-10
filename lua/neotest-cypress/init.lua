@@ -171,6 +171,8 @@ function M.build_spec(args)
 
     -- Use json reporter which outputs to stdout
     -- NeoTest captures stdout to result.output which we parse in results()
+    -- Use --config to override reporter settings from cypress.config.ts
+    -- The config file should detect config.reporter === 'json' and skip hooks
     local command = {
       "npx",
       "cypress",
@@ -179,6 +181,8 @@ function M.build_spec(args)
       position.path,
       "--reporter",
       "json",
+      "--config",
+      "reporter=json,reporterOptions={}",
       "--headless",
     }
 
