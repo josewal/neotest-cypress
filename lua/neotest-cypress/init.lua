@@ -167,17 +167,21 @@ function M.build_spec(args)
 
     -- Use json reporter which outputs to stdout
     -- NeoTest captures stdout to result.output which we parse in results()
+    local command = {
+      "npx",
+      "cypress",
+      "run",
+      "--spec",
+      position.path,
+      "--reporter",
+      "json",
+      "--headless",
+    }
+
+    pp("build_spec: command", table.concat(command, " "))
+
     return {
-      command = {
-        "npx",
-        "cypress",
-        "run",
-        "--spec",
-        position.path,
-        "--reporter",
-        "json",
-        "--headless",
-      },
+      command = command,
       context = {
         pos_id = position.id,
         file = position.path,
