@@ -1,4 +1,5 @@
 local lib = require("neotest.lib")
+local results_parser = require("neotest-cypress.results")
 
 local M = {}
 
@@ -27,8 +28,12 @@ end
 
 -- Discover test positions using treesitter
 function M.discover_positions(file_path)
-  -- TODO: Implement in Phase 2
-  return {}
+  local query = lib.treesitter.parse_positions(file_path, {
+    nested_namespaces = true,
+    require_namespaces = false,
+    position_id = "require('neotest-cypress.util').create_position_id",
+  })
+  return query or lib.positions.parse_tree(lib.files.read(file_path))
 end
 
 -- Build the Cypress command to execute tests
@@ -58,8 +63,19 @@ end
 
 -- Parse Cypress JSON output and map to NeoTest format
 function M.results(spec, result, tree)
-  -- TODO: Implement in Phase 3
-  return {}
+  local results_path = spec.context.results_path
+  local file_path = spec.context.file or tree:data().path
+
+  if not results_path then
+    return {}
+  end
+
+  local success, parsed_results = pcall(results_parser.parse, results_path, file_path)
+  if not success then
+    return {}
+  end
+
+  return parsed_results
 end
 
 return M
