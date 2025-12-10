@@ -168,8 +168,8 @@ function M.build_spec(args)
     -- Use json reporter which outputs to stdout
     -- NeoTest captures stdout to result.output which we parse in results()
     return {
-      command = "npx",
-      args = {
+      command = {
+        "npx",
         "cypress",
         "run",
         "--spec",
