@@ -100,54 +100,40 @@ end
 
 -- Discover test positions using treesitter
 ---@param file_path string
----@return neotest.Position[]
+---@return neotest.Tree
 function M.discover_positions(file_path)
   pp("discover_positions: parsing", file_path)
 
-  -- Try to parse positions with treesitter
-  local success, positions = pcall(function()
-    -- Try the treesitter parsing with file path
-    local parsed = lib.treesitter.parse_positions(
-      file_path,
-      {
-        nested_namespaces = true,
-        require_namespaces = false,
-      }
-    )
+  -- Get the plugin directory
+  local plugin_dir = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h")
 
-    if parsed and #parsed > 0 then
-      pp("discover_positions: treesitter found", #parsed .. " positions")
-      -- Apply our custom position_id function
-      for _, pos in ipairs(parsed) do
-        if pos.name then
-          -- Update the position ID with our custom format
-          pos.id = util.create_position_id(file_path, {pos.name})
-        end
-      end
-    end
+  -- Determine file type to select appropriate query
+  local query_file = "queries/javascript/positions.scm"
+  local query_path = plugin_dir .. "/" .. query_file
 
-    return parsed
-  end)
-
-  if not success or not positions or #positions == 0 then
-    if not success then
-      pp("discover_positions: treesitter error", positions)
-    end
-    pp("discover_positions: falling back to default parser", file_path)
-
-    -- Try fallback: read the file content and use lib.positions.parse_tree
-    local file_content = lib.files.read(file_path)
-
-    if file_content then
-      positions = lib.positions.parse_tree(file_content)
-      pp("discover_positions: fallback found", #positions .. " positions")
-    else
-      pp("discover_positions: failed to read file", file_path)
-      positions = {}
-    end
+  -- Load the query from the positions.scm file
+  local query_content = lib.files.read(query_path)
+  if not query_content then
+    pp("discover_positions: failed to load query", query_path)
+    return {}
   end
 
-  return positions or {}
+  -- Try to parse positions with treesitter using the loaded query
+  local positions = lib.treesitter.parse_positions(file_path, query_content, {
+    nested_namespaces = true,
+    nested_tests = false,
+    require_namespaces = false,
+    position_id = util.create_position_id,
+  })
+
+  if positions and #positions > 0 then
+    pp("discover_positions: treesitter found", #positions .. " positions")
+  else
+    pp("discover_positions: no positions found", file_path)
+    positions = {}
+  end
+
+  return positions
 end
 
 -- Build the Cypress command to execute tests

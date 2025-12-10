@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local util = require("neotest-cypress.util")
 
 describe("util", function()

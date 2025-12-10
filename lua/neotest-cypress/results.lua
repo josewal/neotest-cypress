@@ -5,14 +5,14 @@ local M = {}
 
 -- Map Cypress test state to NeoTest status
 local function map_status(cypress_state)
-  local mapped_status = 
+  local mapped_status =
   (cypress_state == "passed" and "passed") or
   (cypress_state == "failed" and "failed") or
   ((cypress_state == "pending" or cypress_state == "skipped") and "skipped") or
   "skipped"
 
   util.log({
-    cypress_state = cypress_state, 
+    cypress_state = cypress_state,
     mapped_status = mapped_status
   }, "DEBUG")
 
@@ -44,7 +44,7 @@ local function extract_errors(test)
     end
 
     util.log({
-      message = message, 
+      message = message,
       has_stack = not not err.stack
     }, "DEBUG")
 
@@ -58,8 +58,8 @@ local function build_position_id(file_path, title_path)
   return util.safe_call(function()
     if not title_path or #title_path == 0 then
       util.log({
-        file_path = file_path, 
-        title_path = title_path, 
+        file_path = file_path,
+        title_path = title_path,
         message = "No title path, using file path as position ID"
       }, "DEBUG")
       return file_path
@@ -81,19 +81,19 @@ end
 local function extract_json_from_output(output)
   -- Cypress JSON reporter outputs JSON to stdout, but there may be other output mixed in
   -- Look for the JSON object that starts with { and contains "stats"
-  
+
   -- Try to find JSON object boundaries
   local json_start = output:find('{"stats":')
   if not json_start then
     -- Try alternate pattern - sometimes the JSON starts differently
     json_start = output:find('{%s*"stats"')
   end
-  
+
   if not json_start then
     util.log("Could not find JSON start in output", "WARN")
     return nil
   end
-  
+
   -- Find the matching closing brace
   local depth = 0
   local json_end = nil
@@ -109,12 +109,12 @@ local function extract_json_from_output(output)
       end
     end
   end
-  
+
   if not json_end then
     util.log("Could not find JSON end in output", "WARN")
     return nil
   end
-  
+
   return output:sub(json_start, json_end)
 end
 
@@ -124,15 +124,15 @@ local function parse_json_data(data, file_path)
 
   -- Cypress JSON reporter structure: { stats: {...}, tests: [...], ... }
   -- Note: This is different from the full Cypress run output which has { runs: [...] }
-  
+
   local tests = data.tests
-  
+
   -- If data has 'runs' structure (full Cypress output), extract tests from there
   if not tests and data.runs and #data.runs > 0 then
     local run = data.runs[1]
     tests = run.tests
   end
-  
+
   if not tests then
     util.log("No tests found in JSON data", "WARN")
     util.log({ data_keys = vim.tbl_keys(data) }, "DEBUG")
@@ -175,20 +175,20 @@ function M.parse_from_output(output_content, file_path)
 
     -- Extract JSON from the output (may contain non-JSON text)
     local json_str = extract_json_from_output(output_content)
-    
+
     if not json_str then
       util.log("Failed to extract JSON from output", "ERROR")
       util.log({ output_preview = output_content:sub(1, 500) }, "DEBUG")
       return {}
     end
-    
+
     local success, data = pcall(vim.fn.json_decode, json_str)
     if not success then
       util.log("Failed to parse JSON: " .. tostring(data), "ERROR")
       util.log({ json_preview = json_str:sub(1, 500) }, "DEBUG")
       return {}
     end
-    
+
     return parse_json_data(data, file_path)
   end)
 end
@@ -197,7 +197,7 @@ end
 function M.parse(results_path, file_path)
   return util.safe_call(function()
     util.log({
-      results_path = results_path, 
+      results_path = results_path,
       file_path = file_path
     }, "DEBUG")
 

@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local adapter = require("neotest-cypress.init")
 
 describe("init adapter", function()

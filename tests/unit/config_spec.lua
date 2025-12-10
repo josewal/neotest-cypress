@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local cfg = require("neotest-cypress.config")
 
 describe("config", function()

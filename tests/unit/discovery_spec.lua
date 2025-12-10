@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 describe("discovery", function()
   it("should create position IDs correctly", function()
     local util = require("neotest-cypress.util")

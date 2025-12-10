@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 describe("TypeScript Treesitter Queries", function()
   it("should parse arrow functions correctly", function()
     -- Test implementation would go here
