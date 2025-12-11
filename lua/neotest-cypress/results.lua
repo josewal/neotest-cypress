@@ -225,7 +225,6 @@ local function parse_json_data(data, file_path, tree)
       status = status,
       errors = errors,
       short = test.err and test.err.message or nil,
-      output = (test.err and test.err.stack) or "",
     }
     
     util.log({

@@ -171,29 +171,20 @@ function M.build_spec(args)
     -- Use json reporter which outputs to stdout
     -- NeoTest captures stdout to result.output which we parse in results()
     -- Use --config to override reporter settings from cypress.config.ts
-    -- The config file should detect config.reporter === 'json' and skip hooks
-    -- Use --quiet to suppress Cypress UI output and only show reporter output
-    -- Use --silent with npx to suppress npm warnings
     -- Disable video to suppress video output messages
-    local command = {
-      "npx",
-      "--silent",
-      "cypress",
-      "run",
-      "--spec",
-      position.path,
-      "--reporter",
-      "json",
-      "--config",
-      "reporter=json,reporterOptions={},video=false",
-      "--headless",
-      "--quiet",
-    }
+    --
+    -- Wrap the command in a shell that ensures we always get SOME output
+    -- This prevents NeoTest from having an empty result.output
 
-    pp("build_spec: command", table.concat(command, " "))
+    local cypress_cmd = string.format(
+      "npx --silent cypress run --spec %s --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
+      vim.fn.shellescape(position.path)
+    )
+    
+    pp("build_spec: command", cypress_cmd)
 
     return {
-      command = command,
+      command = { "sh", "-c", cypress_cmd },
       cwd = cwd,
       context = {
         pos_id = position.id,
@@ -211,22 +202,65 @@ end
 function M.results(spec, result, tree)
   return util.safe_call(function()
     local file_path = spec.context.file or tree:data().path
+    
+    -- Ensure file_path is valid
+    if not file_path or file_path == "" then
+      pp("results: invalid file_path", {
+        spec_context_file = spec.context.file,
+        tree_data_path = tree:data().path
+      })
+      return {}
+    end
 
     pp("results: parsing output", {
+      file_path = file_path,
       output_file = result.output,
       exit_code = result.code
     })
 
     -- NeoTest captures stdout to a file at result.output
-    if not result.output then
-      pp("results: no output file from neotest", "missing")
-      return {}
+    -- Check if output is nil, empty, or just whitespace
+    if not result.output or result.output == "" or result.output:match("^%s*$") then
+      pp("results: no output file from neotest", {
+        output_value = result.output,
+        output_type = type(result.output)
+      })
+      -- Return a result for the file even when output is missing
+      return {
+        [file_path] = {
+          status = "failed",
+          short = "No output file from NeoTest",
+          errors = {{
+            message = "NeoTest did not capture any output. This might be a configuration issue."
+          }}
+        }
+      }
+    end
+
+    -- Check if the output file exists before trying to read it
+    local file_exists = vim.fn.filereadable(result.output) == 1
+    if not file_exists then
+      pp("results: output file does not exist", {
+        output_path = result.output,
+        cwd = vim.fn.getcwd()
+      })
+      -- Return failed status for the file if output file doesn't exist
+      return {
+        [file_path] = {
+          status = "failed",
+          short = "Cypress output file not found",
+          errors = {{
+            message = string.format("Cypress failed to run or did not create output file.\nOutput path: %s\nExit code: %s", 
+              result.output, (result.code or "unknown"))
+          }}
+        }
+      }
     end
 
     -- Read stdout from the output file that NeoTest created
     local output_content = lib.files.read(result.output)
     if not output_content or output_content == "" then
-      pp("results: output file empty or missing", result.output)
+      pp("results: output file empty", result.output)
       -- Return failed status for the file if Cypress didn't produce output
       return {
         [file_path] = {
@@ -244,6 +278,14 @@ function M.results(spec, result, tree)
       file_path = file_path,
       result_count = parsed_results and vim.tbl_count(parsed_results) or 0
     })
+
+    -- NeoTest requires an output field pointing to a file that contains the raw output
+    -- Set this on all results so the output panel can display it
+    if parsed_results then
+      for pos_id, test_result in pairs(parsed_results) do
+        test_result.output = result.output
+      end
+    end
 
     return parsed_results or {}
   end)
