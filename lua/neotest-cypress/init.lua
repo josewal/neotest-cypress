@@ -22,45 +22,6 @@ M.name = "neotest-cypress"
 -- Configuration
 local current_config = config.defaults
 
--- Get all marked test positions from NeoTest
--- Returns a table of {position_id, test_name} pairs for marked tests
-local function get_marked_tests()
-  local neotest = require("neotest")
-  if not neotest or not neotest.summary or not neotest.summary.marked then
-    return {}
-  end
-  
-  -- marked() returns table<adapter_id, string[]> where string[] are position IDs
-  local marked = neotest.summary.marked()
-  local marked_tests = {}
-  
-  for adapter_id, position_ids in pairs(marked) do
-    for _, pos_id in ipairs(position_ids) do
-      table.insert(marked_tests, pos_id)
-    end
-  end
-  
-  return marked_tests
-end
-
--- Check if the current position is the last marked test
--- Returns true if this is the last one, so we should execute the combined command
-local function is_last_marked_test(current_pos_id, marked_tests)
-  if #marked_tests == 0 then
-    return false
-  end
-  
-  -- Find current position in marked tests list
-  for i, pos_id in ipairs(marked_tests) do
-    if pos_id == current_pos_id then
-      -- Check if this is the last one (or if all remaining are the same position)
-      return i == #marked_tests
-    end
-  end
-  
-  return false
-end
-
 -- Find the project root by locating cypress.config.ts/js or package.json
 ---@param dir string
 ---@return string|nil
@@ -209,96 +170,32 @@ function M.build_spec(args)
       cwd = cwd
     })
 
-    -- Use json reporter which outputs to stdout
-    -- NeoTest captures stdout to result.output which we parse in results()
-    -- Use --config to override reporter settings from cypress.config.ts
-    -- Disable video to suppress video output messages
-    --
-    -- Wrap the command in a shell that ensures we always get SOME output
-    -- This prevents NeoTest from having an empty result.output
-
     local cypress_cmd
-    
-    -- Check for marked tests to run them in a single process
-    if position.type == "test" or position.type == "namespace" then
-      local marked_tests = get_marked_tests()
-      
-      if #marked_tests > 1 then
-        -- Multiple marked tests: check if this is the last one
-        if is_last_marked_test(position.id, marked_tests) then
-          -- Build a combined grep pattern for all marked tests
-          -- Extract test names from position IDs (last component after ::)
-          local test_patterns = {}
-          
-          for _, pos_id in ipairs(marked_tests) do
-            -- Position ID format: file_path::namespace1::namespace2::test_name
-            -- Extract the last part (test name)
-            local test_name = util.get_test_name_from_id(pos_id)
-            if test_name then
-              table.insert(test_patterns, util.escape_grep_pattern(test_name))
-            end
-          end
-          
-          -- Combine patterns with semicolon separator (cypress-grep syntax)
-          local combined_pattern = table.concat(test_patterns, ";")
-          
-          pp("build_spec: combined marked tests", {
-            count = #marked_tests,
-            pattern = combined_pattern
-          })
-          
-          cypress_cmd = string.format(
-            "npx --silent cypress run --env grep=\"%s\",grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
-            combined_pattern
-          )
-        else
-          -- Not the last marked test, return no-op spec
-          -- The actual execution will happen when the final marked test runs
-          pp("build_spec: returning no-op for non-final marked test", position.id)
-          
-          return {
-            command = { "sh", "-c", "echo '{}'" },
-            cwd = cwd,
-            context = {
-              pos_id = position.id,
-              file = position.path,
-              skipped_for_batch = true,  -- Flag for results() to detect
-            },
-          }
-        end
-      else
-        -- Single test: use grep as normal
-        local grep_pattern = util.escape_grep_pattern(position.name)
-        cypress_cmd = string.format(
-          "npx --silent cypress run --env grep=\"%s\",grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
-          grep_pattern
-        )
-      end
-    else
+
+    -- Build appropriate command based on position type
+    if position.type == "file" then
       -- File-level run: use --spec to run entire file
       cypress_cmd = string.format(
         "npx --silent cypress run --spec %s --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
         vim.fn.shellescape(position.path)
       )
+    else
+      -- Test or namespace: use grep to filter
+      local grep_pattern = util.escape_grep_pattern(position.name)
+      cypress_cmd = string.format(
+        "npx --silent cypress run --env grep=\"%s\",grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
+        grep_pattern
+      )
     end
-    
-    pp("build_spec: command", cypress_cmd)
 
-    -- For combined grep runs, set file to root since grep searches all specs
-    local context_file = position.path
-    if position.type == "test" or position.type == "namespace" then
-      local marked_tests = get_marked_tests()
-      if #marked_tests > 1 and is_last_marked_test(position.id, marked_tests) then
-        context_file = cwd  -- Use root for combined grep
-      end
-    end
+    pp("build_spec: command", cypress_cmd)
 
     return {
       command = { "sh", "-c", cypress_cmd },
       cwd = cwd,
       context = {
         pos_id = position.id,
-        file = context_file,
+        file = position.path,
       },
     }
   end)
@@ -311,17 +208,6 @@ end
 ---@return neotest.Result[]
 function M.results(spec, result, tree)
   return util.safe_call(function()
-    -- Check if this was a skipped batch test (no-op for combined marked test execution)
-    if spec.context and spec.context.skipped_for_batch then
-      pp("results: skipped batch test, returning running status", spec.context.pos_id)
-      return {
-        [spec.context.pos_id] = {
-          status = "running",
-          short = "Waiting for combined batch execution",
-        }
-      }
-    end
-
     local file_path = spec.context.file or tree:data().path
     
     -- Ensure file_path is valid

@@ -52,30 +52,7 @@ local function extract_errors(test)
   end)
 end
 
--- Build position ID from Cypress test title path
--- Cypress format: ["describe name", "nested describe", "test name"]
-local function build_position_id(file_path, title_path)
-  return util.safe_call(function()
-    if not title_path or #title_path == 0 then
-      util.log({
-        file_path = file_path,
-        title_path = title_path,
-        message = "No title path, using file path as position ID"
-      }, "DEBUG")
-      return file_path
-    end
 
-    local pos_id = util.create_position_id(file_path, title_path)
-
-    util.log({
-      file_path = file_path,
-      title_path = title_path,
-      pos_id = pos_id
-    }, "DEBUG")
-
-    return pos_id
-  end)
-end
 
 -- Extract JSON from Cypress output (may have other text mixed in)
 local function extract_json_from_output(output)
