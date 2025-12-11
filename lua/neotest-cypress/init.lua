@@ -136,18 +136,17 @@ function M.discover_positions(file_path)
   end
 
   -- Try to parse positions with treesitter using the loaded query
+  -- Use default position_id (path::parent1::parent2::name format)
+---@diagnostic disable-next-line: missing-fields
   local positions = lib.treesitter.parse_positions(file_path, query_content, {
     nested_namespaces = true,
-    nested_tests = false,
-    require_namespaces = false,
-    position_id = util.create_position_id,
+    require_namespaces = true,
   })
 
-  if positions and #positions > 0 then
-    pp("discover_positions: treesitter found", #positions .. " positions")
+  if positions then
+    pp("discover_positions: treesitter parsed", file_path)
   else
     pp("discover_positions: no positions found", file_path)
-    return
   end
 
   return positions
