@@ -208,7 +208,7 @@ end
 ---@param spec neotest.RunSpec
 ---@param result table
 ---@param tree neotest.Tree
----@return table
+---@return neotest.Result[]
 function M.results(spec, result, tree)
   return util.safe_call(function()
     local file_path = spec.context.file or tree:data().path
@@ -240,7 +240,7 @@ function M.results(spec, result, tree)
       }
     end
 
-    local parsed_results = results_parser.parse_from_output(output_content, file_path)
+    local parsed_results = results_parser.parse_from_output(output_content, file_path, tree)
     pp("results: parsed", {
       file_path = file_path,
       result_count = parsed_results and vim.tbl_count(parsed_results) or 0

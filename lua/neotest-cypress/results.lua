@@ -118,8 +118,42 @@ local function extract_json_from_output(output)
   return output:sub(json_start, json_end)
 end
 
+-- Build a map of fullTitle to position ID by walking the tree
+local function build_position_map(tree)
+  local map = {}
+  
+  local function walk(node)
+    local data = node:data()
+    
+    -- Build the fullTitle from the position ID
+    -- Position ID format: file_path::describe::test
+    -- We need to extract everything after file_path and join with spaces
+    if data.type == "test" then
+      local parts = vim.split(data.id, "::", { plain = true })
+      -- Skip the first part (file path) and join the rest with spaces
+      local fullTitle = table.concat(vim.list_slice(parts, 2), " ")
+      map[fullTitle] = data.id
+      
+      util.log({
+        fullTitle = fullTitle,
+        pos_id = data.id
+      }, "DEBUG")
+    end
+    
+    -- Recursively walk children
+    for child in node:iter_nodes() do
+      if child ~= node then
+        walk(child)
+      end
+    end
+  end
+  
+  walk(tree)
+  return map
+end
+
 -- Parse JSON data and convert to NeoTest results format
-local function parse_json_data(data, file_path)
+local function parse_json_data(data, file_path, tree)
   local results = {}
 
   -- Cypress JSON reporter structure: { stats: {...}, tests: [...], passes: [...], failures: [...], pending: [...] }
@@ -160,20 +194,33 @@ local function parse_json_data(data, file_path)
     return results
   end
 
+  -- Build map of fullTitle -> position ID from the tree
+  local position_map = tree and build_position_map(tree) or {}
+
   -- Process each test result
   for _, test in ipairs(tests) do
     -- Cypress JSON reporter gives us:
     -- - title: just the test name
     -- - fullTitle: complete path with describe blocks separated by spaces
-    -- For matching against NeoTest positions, we use fullTitle and create
-    -- a position ID that matches what discover_positions creates
+    -- We need to map this to the position IDs that discover_positions created
     
-    -- Use fullTitle as a single string for now - we'll need to match this
-    -- against the position tree that NeoTest creates
-    local pos_id = file_path .. "::" .. (test.fullTitle or test.title)
+    local fullTitle = test.fullTitle or test.title
+    
+    -- Try to find the position ID from the tree
+    local pos_id = position_map[fullTitle]
+    
+    -- Fallback to old behavior if tree not provided or position not found
+    if not pos_id then
+      pos_id = file_path .. "::" .. fullTitle
+      util.log({
+        message = "Position not found in tree, using fallback",
+        fullTitle = fullTitle,
+        fallback_pos_id = pos_id
+      }, "WARN")
+    end
     
     -- Get state from the state_map, or use test.state if available, or default to skipped
-    local cypress_state = state_map[test.fullTitle or test.title] or test.state or "skipped"
+    local cypress_state = state_map[fullTitle] or test.state or "skipped"
     local status = map_status(cypress_state)
     local errors = nil
 
@@ -190,7 +237,7 @@ local function parse_json_data(data, file_path)
     
     util.log({
       test_title = test.title,
-      test_fullTitle = test.fullTitle,
+      test_fullTitle = fullTitle,
       pos_id = pos_id,
       cypress_state = cypress_state,
       status = status
@@ -206,7 +253,7 @@ local function parse_json_data(data, file_path)
 end
 
 -- Parse Cypress JSON output from stdout content
-function M.parse_from_output(output_content, file_path)
+function M.parse_from_output(output_content, file_path, tree)
   return util.safe_call(function()
     util.log({
       output_length = #output_content,
@@ -229,12 +276,12 @@ function M.parse_from_output(output_content, file_path)
       return {}
     end
 
-    return parse_json_data(data, file_path)
+    return parse_json_data(data, file_path, tree)
   end)
 end
 
 -- Parse Cypress JSON output from file (legacy, kept for compatibility)
-function M.parse(results_path, file_path)
+function M.parse(results_path, file_path, tree)
   return util.safe_call(function()
     util.log({
       results_path = results_path,
@@ -249,7 +296,7 @@ function M.parse(results_path, file_path)
     end
 
     local content = table.concat(vim.fn.readfile(results_path), "\n")
-    return M.parse_from_output(content, file_path)
+    return M.parse_from_output(content, file_path, tree)
   end)
 end
 
