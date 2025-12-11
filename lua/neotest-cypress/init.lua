@@ -252,9 +252,19 @@ function M.build_spec(args)
             combined_pattern
           )
         else
-          -- Not the last marked test, skip it (return nil to prevent duplicate runs)
-          pp("build_spec: skipping non-final marked test", position.id)
-          return nil
+          -- Not the last marked test, return no-op spec
+          -- The actual execution will happen when the final marked test runs
+          pp("build_spec: returning no-op for non-final marked test", position.id)
+          
+          return {
+            command = { "sh", "-c", "echo '{}'" },
+            cwd = cwd,
+            context = {
+              pos_id = position.id,
+              file = position.path,
+              skipped_for_batch = true,  -- Flag for results() to detect
+            },
+          }
         end
       else
         -- Single test: use grep as normal
@@ -301,6 +311,17 @@ end
 ---@return neotest.Result[]
 function M.results(spec, result, tree)
   return util.safe_call(function()
+    -- Check if this was a skipped batch test (no-op for combined marked test execution)
+    if spec.context and spec.context.skipped_for_batch then
+      pp("results: skipped batch test, returning running status", spec.context.pos_id)
+      return {
+        [spec.context.pos_id] = {
+          status = "running",
+          short = "Waiting for combined batch execution",
+        }
+      }
+    end
+
     local file_path = spec.context.file or tree:data().path
     
     -- Ensure file_path is valid

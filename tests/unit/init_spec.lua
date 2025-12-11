@@ -86,7 +86,7 @@ describe("init adapter", function()
      assert.is_nil(string.find(cmd_str, "--spec"))
    end)
 
-   it("returns nil for non-final marked tests", function()
+   it("returns no-op spec for non-final marked tests", function()
      local neotest = require("neotest")
      -- Set up marked tests: test A and test B
      neotest.summary._set_marked({
@@ -107,9 +107,16 @@ describe("init adapter", function()
        end
      }
      
-     -- First marked test should return nil
+     -- First marked test should return a no-op spec
      local spec_A = adapter.build_spec({ tree = mock_tree_A })
-     assert.is_nil(spec_A)
+     assert.is_table(spec_A)
+     assert.is_table(spec_A.command)
+     -- Should be a no-op: echo '{}'
+     assert.equals("sh", spec_A.command[1])
+     assert.equals("-c", spec_A.command[2])
+     assert.is_truthy(string.find(spec_A.command[3], "echo"))
+     -- Check for skipped_for_batch flag
+     assert.is_true(spec_A.context.skipped_for_batch)
    end)
 
    it("combines grep patterns for multiple marked tests", function()
@@ -169,5 +176,38 @@ describe("init adapter", function()
      local cmd_str = spec.command[3]
      -- Should use normal grep without combining
      assert.is_truthy(string.find(cmd_str, '--env grep="single test"'))
+   end)
+ end)
+
+ describe("results parser", function()
+   it("returns running status for skipped batch tests", function()
+     local mock_spec = {
+       context = {
+         pos_id = "tests/fixtures/basic.cy.ts::suite::test A",
+         file = "tests/fixtures/basic.cy.ts",
+         skipped_for_batch = true,
+       }
+     }
+     
+     local mock_result = {
+       output = nil,
+       code = 0
+     }
+     
+     local mock_tree = {
+       data = function()
+         return { path = "tests/fixtures/basic.cy.ts" }
+       end
+     }
+     
+     -- Call results() with skipped batch test
+     local results = adapter.results(mock_spec, mock_result, mock_tree)
+     
+     -- Should return running status for the skipped position
+     assert.is_table(results)
+     local pos_id = "tests/fixtures/basic.cy.ts::suite::test A"
+     assert.is_table(results[pos_id])
+     assert.equals("running", results[pos_id].status)
+     assert.is_truthy(results[pos_id].short)
    end)
  end)
