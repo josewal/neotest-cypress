@@ -197,7 +197,7 @@ function M.parse_from_output(output_content, file_path)
       return {}
     end
 
-    local success, data = pcall(vim.fn.json_decode, json_str)
+    local success, data = pcall(vim.json.decode, json_str)
     if not success then
       util.log("Failed to parse JSON: " .. tostring(data), "ERROR")
       util.log({ json_preview = json_str:sub(1, 500) }, "DEBUG")
