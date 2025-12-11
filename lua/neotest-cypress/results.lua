@@ -141,7 +141,15 @@ local function parse_json_data(data, file_path)
 
   -- Process each test result
   for _, test in ipairs(tests) do
-    local pos_id = build_position_id(file_path, test.title)
+    -- Cypress JSON reporter gives us:
+    -- - title: just the test name
+    -- - fullTitle: complete path with describe blocks separated by spaces
+    -- For matching against NeoTest positions, we use fullTitle and create
+    -- a position ID that matches what discover_positions creates
+    
+    -- Use fullTitle as a single string for now - we'll need to match this
+    -- against the position tree that NeoTest creates
+    local pos_id = file_path .. "::" .. (test.fullTitle or test.title)
     local status = map_status(test.state)
     local errors = nil
 
@@ -155,6 +163,13 @@ local function parse_json_data(data, file_path)
       short = test.err and test.err.message or nil,
       output = (test.err and test.err.stack) or "",
     }
+    
+    util.log({
+      test_title = test.title,
+      test_fullTitle = test.fullTitle,
+      pos_id = pos_id,
+      status = status
+    }, "DEBUG")
   end
 
   util.log({

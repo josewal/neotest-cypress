@@ -173,8 +173,12 @@ function M.build_spec(args)
     -- NeoTest captures stdout to result.output which we parse in results()
     -- Use --config to override reporter settings from cypress.config.ts
     -- The config file should detect config.reporter === 'json' and skip hooks
+    -- Use --quiet to suppress Cypress UI output and only show reporter output
+    -- Use --silent with npx to suppress npm warnings
+    -- Disable video to suppress video output messages
     local command = {
       "npx",
+      "--silent",
       "cypress",
       "run",
       "--spec",
@@ -182,8 +186,9 @@ function M.build_spec(args)
       "--reporter",
       "json",
       "--config",
-      "reporter=json,reporterOptions={}",
+      "reporter=json,reporterOptions={},video=false",
       "--headless",
+      "--quiet",
     }
 
     pp("build_spec: command", table.concat(command, " "))
