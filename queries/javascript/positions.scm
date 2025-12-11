@@ -1,71 +1,49 @@
-;; Capture describe/context blocks
+;; Capture plain namespace blocks: describe(), context()
 ((call_expression
   function: (identifier) @func_name
   arguments: (arguments
     (string (string_fragment) @namespace.name)
-    (arrow_function) @namespace.definition))
+    [
+      (arrow_function)
+      (function_expression)
+    ] @namespace.definition))
   (#any-of? @func_name "describe" "context")) @namespace.definition
 
+;; Capture focused namespace blocks: describe.only(), context.only()
 ((call_expression
-  function: (identifier) @func_name
+  function: (member_expression
+    object: (identifier) @func_name
+    property: (property_identifier) @modifier)
   arguments: (arguments
     (string (string_fragment) @namespace.name)
-    (function_expression) @namespace.definition))
-  (#any-of? @func_name "describe" "context")) @namespace.definition
+    [
+      (arrow_function)
+      (function_expression)
+    ] @namespace.definition))
+  (#any-of? @func_name "describe" "context")
+  (#eq? @modifier "only")) @namespace.definition
 
-;; Capture it/test blocks
+;; Capture plain test blocks: it(), test(), specify()
 ((call_expression
   function: (identifier) @func_name
   arguments: (arguments
     (string (string_fragment) @test.name)
-    (arrow_function) @test.definition))
+    [
+      (arrow_function)
+      (function_expression)
+    ] @test.definition))
   (#any-of? @func_name "it" "test" "specify")) @test.definition
 
-((call_expression
-  function: (identifier) @func_name
-  arguments: (arguments
-    (string (string_fragment) @test.name)
-    (function_expression) @test.definition))
-  (#any-of? @func_name "it" "test" "specify")) @test.definition
-
-;; Capture it.skip/only blocks
+;; Capture focused test blocks: it.only(), test.only(), specify.only()
 ((call_expression
   function: (member_expression
     object: (identifier) @func_name
     property: (property_identifier) @modifier)
   arguments: (arguments
     (string (string_fragment) @test.name)
-    (arrow_function) @test.definition))
+    [
+      (arrow_function)
+      (function_expression)
+    ] @test.definition))
   (#any-of? @func_name "it" "test" "specify")
-  (#any-of? @modifier "skip" "only")) @test.definition
-
-((call_expression
-  function: (member_expression
-    object: (identifier) @func_name
-    property: (property_identifier) @modifier)
-  arguments: (arguments
-    (string (string_fragment) @test.name)
-    (function_expression) @test.definition))
-  (#any-of? @func_name "it" "test" "specify")
-  (#any-of? @modifier "skip" "only")) @test.definition
-
-;; Capture describe.skip/only blocks
-((call_expression
-  function: (member_expression
-    object: (identifier) @func_name
-    property: (property_identifier) @modifier)
-  arguments: (arguments
-    (string (string_fragment) @namespace.name)
-    (arrow_function) @namespace.definition))
-  (#any-of? @func_name "describe" "context")
-  (#any-of? @modifier "skip" "only")) @namespace.definition
-
-((call_expression
-  function: (member_expression
-    object: (identifier) @func_name
-    property: (property_identifier) @modifier)
-  arguments: (arguments
-    (string (string_fragment) @namespace.name)
-    (function_expression) @namespace.definition))
-  (#any-of? @func_name "describe" "context")
-  (#any-of? @modifier "skip" "only")) @namespace.definition
+  (#eq? @modifier "only")) @test.definition
