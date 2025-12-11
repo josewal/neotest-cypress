@@ -122,8 +122,29 @@ end
 local function parse_json_data(data, file_path)
   local results = {}
 
-  -- Cypress JSON reporter structure: { stats: {...}, tests: [...], ... }
+  -- Cypress JSON reporter structure: { stats: {...}, tests: [...], passes: [...], failures: [...], pending: [...] }
   -- Note: This is different from the full Cypress run output which has { runs: [...] }
+
+  -- Build a map of fullTitle -> state from the passes/failures/pending arrays
+  local state_map = {}
+  
+  if data.passes then
+    for _, test in ipairs(data.passes) do
+      state_map[test.fullTitle or test.title] = "passed"
+    end
+  end
+  
+  if data.failures then
+    for _, test in ipairs(data.failures) do
+      state_map[test.fullTitle or test.title] = "failed"
+    end
+  end
+  
+  if data.pending then
+    for _, test in ipairs(data.pending) do
+      state_map[test.fullTitle or test.title] = "skipped"
+    end
+  end
 
   local tests = data.tests
 
@@ -150,7 +171,10 @@ local function parse_json_data(data, file_path)
     -- Use fullTitle as a single string for now - we'll need to match this
     -- against the position tree that NeoTest creates
     local pos_id = file_path .. "::" .. (test.fullTitle or test.title)
-    local status = map_status(test.state)
+    
+    -- Get state from the state_map, or use test.state if available, or default to skipped
+    local cypress_state = state_map[test.fullTitle or test.title] or test.state or "skipped"
+    local status = map_status(cypress_state)
     local errors = nil
 
     if status == "failed" then
@@ -168,6 +192,7 @@ local function parse_json_data(data, file_path)
       test_title = test.title,
       test_fullTitle = test.fullTitle,
       pos_id = pos_id,
+      cypress_state = cypress_state,
       status = status
     }, "DEBUG")
   end
