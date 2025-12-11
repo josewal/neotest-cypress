@@ -22,6 +22,45 @@ M.name = "neotest-cypress"
 -- Configuration
 local current_config = config.defaults
 
+-- Get all marked test positions from NeoTest
+-- Returns a table of {position_id, test_name} pairs for marked tests
+local function get_marked_tests()
+  local neotest = require("neotest")
+  if not neotest or not neotest.summary or not neotest.summary.marked then
+    return {}
+  end
+  
+  -- marked() returns table<adapter_id, string[]> where string[] are position IDs
+  local marked = neotest.summary.marked()
+  local marked_tests = {}
+  
+  for adapter_id, position_ids in pairs(marked) do
+    for _, pos_id in ipairs(position_ids) do
+      table.insert(marked_tests, pos_id)
+    end
+  end
+  
+  return marked_tests
+end
+
+-- Check if the current position is the last marked test
+-- Returns true if this is the last one, so we should execute the combined command
+local function is_last_marked_test(current_pos_id, marked_tests)
+  if #marked_tests == 0 then
+    return false
+  end
+  
+  -- Find current position in marked tests list
+  for i, pos_id in ipairs(marked_tests) do
+    if pos_id == current_pos_id then
+      -- Check if this is the last one (or if all remaining are the same position)
+      return i == #marked_tests
+    end
+  end
+  
+  return false
+end
+
 -- Find the project root by locating cypress.config.ts/js or package.json
 ---@param dir string
 ---@return string|nil
@@ -179,14 +218,52 @@ function M.build_spec(args)
     -- This prevents NeoTest from having an empty result.output
 
     local cypress_cmd
+    
+    -- Check for marked tests to run them in a single process
     if position.type == "test" or position.type == "namespace" then
-      -- Individual test or namespace: use grep only (searches across all specs)
-      -- This allows running tests from different files with the same name pattern
-      local grep_pattern = util.escape_grep_pattern(position.name)
-      cypress_cmd = string.format(
-        "npx --silent cypress run --env grep=\"%s\",grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
-        grep_pattern
-      )
+      local marked_tests = get_marked_tests()
+      
+      if #marked_tests > 1 then
+        -- Multiple marked tests: check if this is the last one
+        if is_last_marked_test(position.id, marked_tests) then
+          -- Build a combined grep pattern for all marked tests
+          -- Extract test names from position IDs (last component after ::)
+          local test_patterns = {}
+          
+          for _, pos_id in ipairs(marked_tests) do
+            -- Position ID format: file_path::namespace1::namespace2::test_name
+            -- Extract the last part (test name)
+            local test_name = util.get_test_name_from_id(pos_id)
+            if test_name then
+              table.insert(test_patterns, util.escape_grep_pattern(test_name))
+            end
+          end
+          
+          -- Combine patterns with OR operator (|)
+          local combined_pattern = table.concat(test_patterns, "|")
+          
+          pp("build_spec: combined marked tests", {
+            count = #marked_tests,
+            pattern = combined_pattern
+          })
+          
+          cypress_cmd = string.format(
+            "npx --silent cypress run --env grep=\"%s\",grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
+            combined_pattern
+          )
+        else
+          -- Not the last marked test, skip it (return nil to prevent duplicate runs)
+          pp("build_spec: skipping non-final marked test", position.id)
+          return nil
+        end
+      else
+        -- Single test: use grep as normal
+        local grep_pattern = util.escape_grep_pattern(position.name)
+        cypress_cmd = string.format(
+          "npx --silent cypress run --env grep=\"%s\",grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
+          grep_pattern
+        )
+      end
     else
       -- File-level run: use --spec to run entire file
       cypress_cmd = string.format(
@@ -197,12 +274,21 @@ function M.build_spec(args)
     
     pp("build_spec: command", cypress_cmd)
 
+    -- For combined grep runs, set file to root since grep searches all specs
+    local context_file = position.path
+    if position.type == "test" or position.type == "namespace" then
+      local marked_tests = get_marked_tests()
+      if #marked_tests > 1 and is_last_marked_test(position.id, marked_tests) then
+        context_file = cwd  -- Use root for combined grep
+      end
+    end
+
     return {
       command = { "sh", "-c", cypress_cmd },
       cwd = cwd,
       context = {
         pos_id = position.id,
-        file = position.path,
+        file = context_file,
       },
     }
   end)

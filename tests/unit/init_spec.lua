@@ -68,21 +68,106 @@ describe("init adapter", function()
   end)
 
   it("builds a run spec with grep only for a namespace", function()
-    local mock_tree = {
-      data = function()
-        return { 
-          path = "tests/fixtures/basic.cy.ts", 
-          id = "tests/fixtures/basic.cy.ts::basic test suite",
-          type = "namespace",
-          name = "basic test suite"
-        }
-      end
-    }
-    local spec = adapter.build_spec({ tree = mock_tree })
-    local cmd_str = spec.command[3]
-    -- Namespace runs: should contain grep, NOT --spec
-    assert.is_truthy(string.find(cmd_str, '--env grep="basic test suite"'))
-    assert.is_truthy(string.find(cmd_str, "grepFilterSpecs=true"))
-    assert.is_nil(string.find(cmd_str, "--spec"))
-  end)
-end)
+     local mock_tree = {
+       data = function()
+         return { 
+           path = "tests/fixtures/basic.cy.ts", 
+           id = "tests/fixtures/basic.cy.ts::basic test suite",
+           type = "namespace",
+           name = "basic test suite"
+         }
+       end
+     }
+     local spec = adapter.build_spec({ tree = mock_tree })
+     local cmd_str = spec.command[3]
+     -- Namespace runs: should contain grep, NOT --spec
+     assert.is_truthy(string.find(cmd_str, '--env grep="basic test suite"'))
+     assert.is_truthy(string.find(cmd_str, "grepFilterSpecs=true"))
+     assert.is_nil(string.find(cmd_str, "--spec"))
+   end)
+
+   it("returns nil for non-final marked tests", function()
+     local neotest = require("neotest")
+     -- Set up marked tests: test A and test B
+     neotest.summary._set_marked({
+       ["neotest-cypress"] = {
+         "tests/fixtures/basic.cy.ts::basic test suite::test A",
+         "tests/fixtures/basic.cy.ts::basic test suite::test B",
+       }
+     })
+
+     local mock_tree_A = {
+       data = function()
+         return { 
+           path = "tests/fixtures/basic.cy.ts", 
+           id = "tests/fixtures/basic.cy.ts::basic test suite::test A",
+           type = "test",
+           name = "test A"
+         }
+       end
+     }
+     
+     -- First marked test should return nil
+     local spec_A = adapter.build_spec({ tree = mock_tree_A })
+     assert.is_nil(spec_A)
+   end)
+
+   it("combines grep patterns for multiple marked tests", function()
+     local neotest = require("neotest")
+     -- Set up marked tests: test A and test B
+     neotest.summary._set_marked({
+       ["neotest-cypress"] = {
+         "tests/fixtures/basic.cy.ts::basic test suite::test A",
+         "tests/fixtures/basic.cy.ts::basic test suite::test B",
+       }
+     })
+
+     local mock_tree_B = {
+       data = function()
+         return { 
+           path = "tests/fixtures/basic.cy.ts", 
+           id = "tests/fixtures/basic.cy.ts::basic test suite::test B",
+           type = "test",
+           name = "test B"
+         }
+       end
+     }
+     
+     -- Second (last) marked test should return a spec with combined pattern
+     local spec_B = adapter.build_spec({ tree = mock_tree_B })
+     assert.is_table(spec_B)
+     assert.is_table(spec_B.command)
+     
+     local cmd_str = spec_B.command[3]
+     -- Should contain combined pattern with OR operator
+     assert.is_truthy(string.find(cmd_str, '--env grep='))
+     assert.is_truthy(string.find(cmd_str, 'test A'))
+     assert.is_truthy(string.find(cmd_str, 'test B'))
+     -- Should contain the OR operator
+     assert.is_truthy(string.find(cmd_str, '|'))
+   end)
+
+   it("clears marked tests after handling them", function()
+     local neotest = require("neotest")
+     -- Clear any previous marked tests
+     neotest.summary._set_marked({})
+     
+     local mock_tree = {
+       data = function()
+         return { 
+           path = "tests/fixtures/basic.cy.ts", 
+           id = "tests/fixtures/basic.cy.ts::basic test suite::single test",
+           type = "test",
+           name = "single test"
+         }
+       end
+     }
+     
+     -- With no marked tests, should behave like a normal single test
+     local spec = adapter.build_spec({ tree = mock_tree })
+     assert.is_table(spec)
+     local cmd_str = spec.command[3]
+     -- Should use normal grep without combining
+     assert.is_truthy(string.find(cmd_str, '--env grep="single test"'))
+   end)
+ end)
