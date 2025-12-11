@@ -122,7 +122,8 @@ end
 local function build_position_map(tree)
   local map = {}
   
-  local function walk(node)
+  -- iter_nodes() returns an iterator that yields (index, node) pairs
+  for _, node in tree:iter_nodes() do
     local data = node:data()
     
     -- Build the fullTitle from the position ID
@@ -139,16 +140,8 @@ local function build_position_map(tree)
         pos_id = data.id
       }, "DEBUG")
     end
-    
-    -- Recursively walk children
-    for child in node:iter_nodes() do
-      if child ~= node then
-        walk(child)
-      end
-    end
   end
   
-  walk(tree)
   return map
 end
 
