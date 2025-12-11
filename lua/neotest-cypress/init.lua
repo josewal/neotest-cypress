@@ -165,8 +165,21 @@ function M.build_spec(args)
     pp("build_spec", {
       spec = position.path,
       position_id = position.id,
+      position_type = position.type,
+      position_name = position.name,
       cwd = cwd
     })
+
+    -- Build the grep env string if running specific test(s) or namespace(s)
+    local grep_env = ""
+    if position.type == "test" or position.type == "namespace" then
+      -- Escape the test name for use in grep pattern
+      local grep_pattern = util.escape_grep_pattern(position.name)
+      grep_env = string.format(
+        ' --env grep="%s",grepFilterSpecs=true,grepOmitFiltered=true',
+        grep_pattern
+      )
+    end
 
     -- Use json reporter which outputs to stdout
     -- NeoTest captures stdout to result.output which we parse in results()
@@ -177,8 +190,9 @@ function M.build_spec(args)
     -- This prevents NeoTest from having an empty result.output
 
     local cypress_cmd = string.format(
-      "npx --silent cypress run --spec %s --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
-      vim.fn.shellescape(position.path)
+      "npx --silent cypress run --spec %s --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet%s 2>&1",
+      vim.fn.shellescape(position.path),
+      grep_env
     )
     
     pp("build_spec: command", cypress_cmd)

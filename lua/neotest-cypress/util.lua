@@ -68,6 +68,13 @@ function M.get_namespace_path(pos_id)
   return namespaces
 end
 
-
+-- Escape special characters for cypress-grep pattern
+-- cypress-grep uses minimatch/regex, so we escape regex special chars
+function M.escape_grep_pattern(pattern)
+  -- Escape regex special characters that might appear in test names
+  -- Characters: ( ) . % + - * ? [ ] ^ $ { } | \
+  local escaped = pattern:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$%{%}%|\\])", "\\%1")
+  return escaped
+end
 
 return M
