@@ -239,8 +239,8 @@ function M.build_spec(args)
             end
           end
           
-          -- Combine patterns with OR operator (|)
-          local combined_pattern = table.concat(test_patterns, "|")
+          -- Combine patterns with semicolon separator (cypress-grep syntax)
+          local combined_pattern = table.concat(test_patterns, ";")
           
           pp("build_spec: combined marked tests", {
             count = #marked_tests,

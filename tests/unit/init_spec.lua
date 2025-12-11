@@ -145,13 +145,13 @@ describe("init adapter", function()
      assert.is_table(spec_B)
      assert.is_table(spec_B.command)
      
-     local cmd_str = spec_B.command[3]
-     -- Should contain combined pattern with OR operator
-     assert.is_truthy(string.find(cmd_str, '--env grep='))
-     assert.is_truthy(string.find(cmd_str, 'test A'))
-     assert.is_truthy(string.find(cmd_str, 'test B'))
-     -- Should contain the OR operator
-     assert.is_truthy(string.find(cmd_str, '|'))
+      local cmd_str = spec_B.command[3]
+      -- Should contain combined pattern with semicolon separator (cypress-grep syntax)
+      assert.is_truthy(string.find(cmd_str, '--env grep='))
+      assert.is_truthy(string.find(cmd_str, 'test A'))
+      assert.is_truthy(string.find(cmd_str, 'test B'))
+      -- Should contain the semicolon separator
+      assert.is_truthy(string.find(cmd_str, ';'))
    end)
 
    it("clears marked tests after handling them", function()
