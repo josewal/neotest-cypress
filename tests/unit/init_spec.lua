@@ -19,7 +19,7 @@ describe("init adapter", function()
     assert.is_table(positions)
   end)
 
-  it("builds a run spec for a file (no grep)", function()
+  it("builds a run spec for a file with --spec only", function()
     local mock_tree = {
       data = function()
         return { 
@@ -38,11 +38,13 @@ describe("init adapter", function()
     assert.is_string(spec.cwd)  -- cwd should be set to project root
     assert.is_table(spec.context)
     assert.equals("tests/fixtures/basic.cy.ts", spec.context.file)
-    -- Should NOT contain grep env for file-level runs
-    assert.is_nil(string.find(spec.command[3], "--env grep"))
+    -- File runs: should contain --spec, NOT grep
+    local cmd_str = spec.command[3]
+    assert.is_truthy(string.find(cmd_str, "--spec"))
+    assert.is_nil(string.find(cmd_str, "--env grep"))
   end)
 
-  it("builds a run spec with grep for a specific test", function()
+  it("builds a run spec with grep only for a specific test", function()
     local mock_tree = {
       data = function()
         return { 
@@ -58,13 +60,14 @@ describe("init adapter", function()
     assert.is_table(spec.command)
     assert.equals("sh", spec.command[1])
     assert.equals("-c", spec.command[2])
-    -- Should contain grep env for test-level runs
+    -- Test runs: should contain grep, NOT --spec
     local cmd_str = spec.command[3]
     assert.is_truthy(string.find(cmd_str, '--env grep="should pass"'))
     assert.is_truthy(string.find(cmd_str, "grepFilterSpecs=true"))
+    assert.is_nil(string.find(cmd_str, "--spec"))
   end)
 
-  it("builds a run spec with grep for a namespace", function()
+  it("builds a run spec with grep only for a namespace", function()
     local mock_tree = {
       data = function()
         return { 
@@ -77,7 +80,9 @@ describe("init adapter", function()
     }
     local spec = adapter.build_spec({ tree = mock_tree })
     local cmd_str = spec.command[3]
+    -- Namespace runs: should contain grep, NOT --spec
     assert.is_truthy(string.find(cmd_str, '--env grep="basic test suite"'))
     assert.is_truthy(string.find(cmd_str, "grepFilterSpecs=true"))
+    assert.is_nil(string.find(cmd_str, "--spec"))
   end)
 end)

@@ -170,17 +170,6 @@ function M.build_spec(args)
       cwd = cwd
     })
 
-    -- Build the grep env string if running specific test(s) or namespace(s)
-    local grep_env = ""
-    if position.type == "test" or position.type == "namespace" then
-      -- Escape the test name for use in grep pattern
-      local grep_pattern = util.escape_grep_pattern(position.name)
-      grep_env = string.format(
-        ' --env grep="%s",grepFilterSpecs=true,grepOmitFiltered=true',
-        grep_pattern
-      )
-    end
-
     -- Use json reporter which outputs to stdout
     -- NeoTest captures stdout to result.output which we parse in results()
     -- Use --config to override reporter settings from cypress.config.ts
@@ -189,11 +178,22 @@ function M.build_spec(args)
     -- Wrap the command in a shell that ensures we always get SOME output
     -- This prevents NeoTest from having an empty result.output
 
-    local cypress_cmd = string.format(
-      "npx --silent cypress run --spec %s --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet%s 2>&1",
-      vim.fn.shellescape(position.path),
-      grep_env
-    )
+    local cypress_cmd
+    if position.type == "test" or position.type == "namespace" then
+      -- Individual test or namespace: use grep only (searches across all specs)
+      -- This allows running tests from different files with the same name pattern
+      local grep_pattern = util.escape_grep_pattern(position.name)
+      cypress_cmd = string.format(
+        "npx --silent cypress run --env grep=\"%s\",grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
+        grep_pattern
+      )
+    else
+      -- File-level run: use --spec to run entire file
+      cypress_cmd = string.format(
+        "npx --silent cypress run --spec %s --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
+        vim.fn.shellescape(position.path)
+      )
+    end
     
     pp("build_spec: command", cypress_cmd)
 
