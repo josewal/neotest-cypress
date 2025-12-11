@@ -15,20 +15,37 @@ M.log_level = "INFO"
 
 -- Debug logging function with level filtering
 function M.log(msg, level)
-  level = level or 'INFO'
+  -- Safely handle logging in fast event contexts
+  local success, result = pcall(function()
+    level = level or 'INFO'
 
-  -- Only log if the current log level is high enough
-  if log_levels[level] and log_levels[M.log_level] and log_levels[level] > log_levels[M.log_level] then
-    return
-  end
+    -- Only log if the current log level is high enough
+    if log_levels[level] and log_levels[M.log_level] and log_levels[level] > log_levels[M.log_level] then
+      return
+    end
 
-  local log_file = vim.fn.stdpath('data') .. '/neotest-cypress.log'
-  local timestamp = os.date('%Y-%m-%d %H:%M:%S')
+    -- Use os.getenv to get home dir as fallback to avoid vim.fn in fast context
+    local data_dir
+    if vim.fn and vim.fn.stdpath then
+      data_dir = vim.fn.stdpath('data')
+    else
+      data_dir = os.getenv('HOME') .. '/.local/share/nvim'
+    end
+    local log_file = data_dir .. '/neotest-cypress.log'
+    local timestamp = os.date('%Y-%m-%d %H:%M:%S')
 
-  local f = io.open(log_file, 'a')
-  if f then
-    f:write(string.format("[%s] %s: %s\n", level, timestamp, vim.inspect(msg)))
-    f:close()
+    local f = io.open(log_file, 'a')
+    if f then
+      -- Use safe tostring instead of vim.inspect in case it's not available
+      local msg_str = vim.inspect and vim.inspect(msg) or tostring(msg)
+      f:write(string.format("[%s] %s: %s\n", level, timestamp, msg_str))
+      f:close()
+    end
+  end)
+  
+  -- If logging fails, just silently continue
+  if not success then
+    -- Could optionally print to stderr: io.stderr:write("Logging failed: " .. tostring(result) .. "\n")
   end
 end
 
@@ -59,6 +76,14 @@ function M.escape_grep_pattern(pattern)
   -- Characters: ( ) . % + - * ? [ ] ^ $ { } | \
   local escaped = pattern:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$%{%}%|\\])", "\\%1")
   return escaped
+end
+
+-- Shell escape function to replace vim.fn.shellescape() 
+-- This is safe to call from fast event contexts
+function M.shell_escape(str)
+  if not str then return '""' end
+  -- Simple shell escaping: wrap in single quotes and escape any single quotes
+  return "'" .. str:gsub("'", "'\"'\"'") .. "'"
 end
 
 return M

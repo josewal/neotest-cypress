@@ -1,5 +1,6 @@
 local vim = vim
 local util = require("neotest-cypress.util")
+local lib = require("neotest.lib")
 
 local M = {}
 
@@ -56,18 +57,55 @@ end
 
 -- Extract JSON from Cypress output (may have other text mixed in)
 local function extract_json_from_output(output)
-  -- Cypress JSON reporter outputs JSON to stdout, but there may be other output mixed in
-  -- Look for the JSON object that starts with { and contains "stats"
+  -- If the output looks like pure JSON (starts with {), try to use it directly
+  local trimmed = output:match("^%s*(.-)%s*$") -- trim whitespace
+  if trimmed:sub(1, 1) == "{" then
+    -- Try to validate it's complete JSON by checking if it ends with }
+    if trimmed:sub(-1) == "}" then
+      util.log("Using output as pure JSON", "DEBUG")
+      return trimmed
+    end
+  end
 
-  -- Try to find JSON object boundaries
-  local json_start = output:find('{"stats":')
+  -- Cypress JSON reporter outputs JSON to stdout, but there may be other output mixed in
+  -- Look for the JSON object that starts with { and contains "stats" or "runs"
+  
+  -- Try multiple patterns for finding JSON start
+  local patterns = {
+    '{"stats":',      -- Direct stats object (JSON reporter)
+    '{"runs":',       -- Full run results
+    '{%s*"stats"',    -- Stats with whitespace
+    '{%s*"runs"',     -- Runs with whitespace
+    '{"[^"]*":[^{]*{' -- Any JSON object that might contain nested objects
+  }
+
+  local json_start = nil
+  for _, pattern in ipairs(patterns) do
+    json_start = output:find(pattern)
+    if json_start then
+      util.log("Found JSON start with pattern: " .. pattern, "DEBUG")
+      break
+    end
+  end
+
   if not json_start then
-    -- Try alternate pattern - sometimes the JSON starts differently
-    json_start = output:find('{%s*"stats"')
+    -- Last resort: look for any object that starts with { and has reasonable content
+    for i = 1, #output do
+      if output:sub(i, i) == '{' then
+        -- Check if this looks like a reasonable JSON start (has quotes and colons nearby)
+        local sample = output:sub(i, math.min(i + 50, #output))
+        if sample:find('":') then
+          json_start = i
+          util.log("Found JSON start at position " .. i, "DEBUG")
+          break
+        end
+      end
+    end
   end
 
   if not json_start then
     util.log("Could not find JSON start in output", "WARN")
+    util.log("Output preview: " .. output:sub(1, 200), "DEBUG")
     return nil
   end
 
@@ -88,11 +126,14 @@ local function extract_json_from_output(output)
   end
 
   if not json_end then
-    util.log("Could not find JSON end in output", "WARN")
+    util.log("Could not find JSON end in output (depth=" .. depth .. ")", "WARN")
+    util.log("Output from json_start: " .. output:sub(json_start, json_start + 200), "DEBUG")
     return nil
   end
 
-  return output:sub(json_start, json_end)
+  local json_str = output:sub(json_start, json_end)
+  util.log("Extracted JSON length: " .. #json_str, "DEBUG")
+  return json_str
 end
 
 -- Build a map of fullTitle to position ID by walking the tree
@@ -241,7 +282,7 @@ function M.parse_from_output(output_content, file_path, tree)
     local success, data = pcall(vim.json.decode, json_str)
     if not success then
       util.log("Failed to parse JSON: " .. tostring(data), "ERROR")
-      util.log({ json_preview = json_str:sub(1, 500) }, "DEBUG")
+      util.log({ json_preview = json_str }, "DEBUG")
       return {}
     end
 
@@ -258,13 +299,13 @@ function M.parse(results_path, file_path, tree)
     }, "DEBUG")
 
     -- Check if file exists
-    local file_exists = vim.fn.filereadable(results_path) == 1
+    local file_exists = lib.files.exists(results_path)
     if not file_exists then
       util.log("Results file does not exist: " .. results_path, "ERROR")
       return {}
     end
 
-    local content = table.concat(vim.fn.readfile(results_path), "\n")
+    local content = lib.files.read(results_path)
     return M.parse_from_output(content, file_path, tree)
   end)
 end

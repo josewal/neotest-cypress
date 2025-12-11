@@ -161,30 +161,39 @@ function M.build_spec(args)
 
     -- Find the project root directory
     local cwd = M.root(position.path)
+    
+    -- Create a temporary file for Cypress JSON output
+    -- NOTE: Unlike JUnit/Mochawesome reporters, Mocha's JSON reporter does NOT support
+    -- --reporter-options output=file.json. We must use stdout redirection instead.
+    local results_file = os.tmpname() .. "_cypress.json"
 
     pp("build_spec", {
       spec = position.path,
       position_id = position.id,
       position_type = position.type,
       position_name = position.name,
-      cwd = cwd
+      cwd = cwd,
+      results_file = results_file
     })
 
     local cypress_cmd
 
     -- Build appropriate command based on position type
+    -- NOTE: JSON reporter doesn't support file output directly, so we use stdout redirection
     if position.type == "file" then
-      -- File-level run: use --spec to run entire file
+      -- File-level run: use --spec to run entire file with JSON output redirected to file
       cypress_cmd = string.format(
-        "npx --silent cypress run --spec %s --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
-        vim.fn.shellescape(position.path)
+        "npx --silent cypress run --spec %s --reporter json --config video=false --headless > %s",
+        util.shell_escape(position.path),
+        util.shell_escape(results_file)
       )
     else
-      -- Test or namespace: use grep to filter
-      local grep_pattern = util.escape_grep_pattern(position.name)
+      -- Test or namespace: use grep to filter with JSON output redirected to file
+      local grep_pattern = position.name
       cypress_cmd = string.format(
-        "npx --silent cypress run --env grep=\"%s\",grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config reporter=json,reporterOptions={},video=false --headless --quiet 2>&1",
-        grep_pattern
+        "npx --silent cypress run --env grep='%s',grepFilterSpecs=true,grepOmitFiltered=true --reporter json --config video=false --headless > %s",
+        grep_pattern,
+        util.shell_escape(results_file)
       )
     end
 
@@ -196,6 +205,7 @@ function M.build_spec(args)
       context = {
         pos_id = position.id,
         file = position.path,
+        results_file = results_file,
       },
     }
   end)
@@ -209,6 +219,7 @@ end
 function M.results(spec, result, tree)
   return util.safe_call(function()
     local file_path = spec.context.file or tree:data().path
+    local results_file = spec.context.results_file
     
     -- Ensure file_path is valid
     if not file_path or file_path == "" then
@@ -221,66 +232,85 @@ function M.results(spec, result, tree)
 
     pp("results: parsing output", {
       file_path = file_path,
-      output_file = result.output,
+      results_file = results_file,
+      neotest_output_file = result.output,
       exit_code = result.code
     })
 
-    -- NeoTest captures stdout to a file at result.output
-    -- Check if output is nil, empty, or just whitespace
-    if not result.output or result.output == "" or result.output:match("^%s*$") then
-      pp("results: no output file from neotest", {
-        output_value = result.output,
-        output_type = type(result.output)
+    -- First, try to read from the dedicated Cypress JSON results file
+    local json_content = nil
+    local output_for_panel = result.output or ""
+    
+    if results_file and lib.files.exists(results_file) then
+      pp("results: reading from dedicated results file", results_file)
+      json_content = lib.files.read(results_file)
+      
+      -- Clean up the temporary file using os.remove (Lua native)
+      pcall(os.remove, results_file)
+    end
+
+    -- If no dedicated results file or it's empty, fall back to NeoTest's output capture
+    if not json_content or json_content == "" then
+      pp("results: falling back to neotest output", {
+        results_file_exists = results_file and lib.files.exists(results_file),
+        results_file_empty = json_content == "",
+        neotest_output = result.output
       })
-      -- Return a result for the file even when output is missing
-      return {
-        [file_path] = {
-          status = "failed",
-          short = "No output file from NeoTest",
-          errors = {{
-            message = "NeoTest did not capture any output. This might be a configuration issue."
-          }}
+      
+      if not result.output or result.output == "" then
+        pp("results: no output available", {
+          results_file = results_file,
+          neotest_output = result.output
+        })
+        return {
+          [file_path] = {
+            status = "failed",
+            short = "No output from Cypress",
+            errors = {{
+              message = string.format("Cypress failed to produce output.\nExit code: %s\nResults file: %s", 
+                (result.code or "unknown"), (results_file or "none"))
+            }},
+            output = output_for_panel
+          }
         }
-      }
+      end
+      
+      -- Check if the NeoTest output file exists
+      local neotest_file_exists = lib.files.exists(result.output)
+      if not neotest_file_exists then
+        pp("results: neotest output file does not exist", result.output)
+        return {
+          [file_path] = {
+            status = "failed",
+            short = "Output file not found",
+            errors = {{
+              message = string.format("Neither Cypress results file nor NeoTest output file found.\nCypress file: %s\nNeoTest file: %s\nExit code: %s", 
+                (results_file or "none"), result.output, (result.code or "unknown"))
+            }},
+            output = output_for_panel
+          }
+        }
+      end
+      
+      -- Read from NeoTest's output file and try to extract JSON
+      json_content = lib.files.read(result.output)
+      if not json_content or json_content == "" then
+        pp("results: neotest output file empty", result.output)
+        return {
+          [file_path] = {
+            status = "failed",
+            short = "Empty output file",
+            errors = {{
+              message = "Cypress produced no output. Exit code: " .. (result.code or "unknown")
+            }},
+            output = output_for_panel
+          }
+        }
+      end
     end
 
-    -- Check if the output file exists before trying to read it
-    local file_exists = vim.fn.filereadable(result.output) == 1
-    if not file_exists then
-      pp("results: output file does not exist", {
-        output_path = result.output,
-        cwd = vim.fn.getcwd()
-      })
-      -- Return failed status for the file if output file doesn't exist
-      return {
-        [file_path] = {
-          status = "failed",
-          short = "Cypress output file not found",
-          errors = {{
-            message = string.format("Cypress failed to run or did not create output file.\nOutput path: %s\nExit code: %s", 
-              result.output, (result.code or "unknown"))
-          }}
-        }
-      }
-    end
-
-    -- Read stdout from the output file that NeoTest created
-    local output_content = lib.files.read(result.output)
-    if not output_content or output_content == "" then
-      pp("results: output file empty", result.output)
-      -- Return failed status for the file if Cypress didn't produce output
-      return {
-        [file_path] = {
-          status = "failed",
-          short = "Cypress did not produce any output",
-          errors = {{
-            message = "Cypress failed to run. Exit code: " .. (result.code or "unknown")
-          }}
-        }
-      }
-    end
-
-    local parsed_results = results_parser.parse_from_output(output_content, file_path, tree)
+    -- Parse the JSON content
+    local parsed_results = results_parser.parse_from_output(json_content, file_path, tree)
     pp("results: parsed", {
       file_path = file_path,
       result_count = parsed_results and vim.tbl_count(parsed_results) or 0
@@ -290,7 +320,7 @@ function M.results(spec, result, tree)
     -- Set this on all results so the output panel can display it
     if parsed_results then
       for pos_id, test_result in pairs(parsed_results) do
-        test_result.output = result.output
+        test_result.output = output_for_panel
       end
     end
 
