@@ -239,14 +239,13 @@ function M.results(spec, result, tree)
 
     -- First, try to read from the dedicated Cypress JSON results file
     local json_content = nil
-    local output_for_panel = result.output or ""
+    local output_file_for_panel = nil
     
     if results_file and lib.files.exists(results_file) then
       pp("results: reading from dedicated results file", results_file)
       json_content = lib.files.read(results_file)
-      
-      -- Clean up the temporary file using os.remove (Lua native)
-      pcall(os.remove, results_file)
+      -- Keep the clean results file for the output panel - don't delete it yet
+      output_file_for_panel = results_file
     end
 
     -- If no dedicated results file or it's empty, fall back to NeoTest's output capture
@@ -270,7 +269,7 @@ function M.results(spec, result, tree)
               message = string.format("Cypress failed to produce output.\nExit code: %s\nResults file: %s", 
                 (result.code or "unknown"), (results_file or "none"))
             }},
-            output = output_for_panel
+            output = result.output or ""
           }
         }
       end
@@ -287,7 +286,7 @@ function M.results(spec, result, tree)
               message = string.format("Neither Cypress results file nor NeoTest output file found.\nCypress file: %s\nNeoTest file: %s\nExit code: %s", 
                 (results_file or "none"), result.output, (result.code or "unknown"))
             }},
-            output = output_for_panel
+            output = result.output or ""
           }
         }
       end
@@ -303,7 +302,7 @@ function M.results(spec, result, tree)
             errors = {{
               message = "Cypress produced no output. Exit code: " .. (result.code or "unknown")
             }},
-            output = output_for_panel
+            output = result.output or ""
           }
         }
       end
@@ -320,7 +319,8 @@ function M.results(spec, result, tree)
     -- Set this on all results so the output panel can display it
     if parsed_results then
       for pos_id, test_result in pairs(parsed_results) do
-        test_result.output = output_for_panel
+        -- Use the clean JSON results file if available, otherwise fall back to NeoTest's output
+        test_result.output = output_file_for_panel or result.output or ""
       end
     end
 
