@@ -31,8 +31,8 @@ A [NeoTest](https://github.com/nvim-neotest/neotest) adapter for [Cypress](https
   dependencies = {
     "nvim-lua/plenary.nvim",
     "nvim-treesitter/nvim-treesitter",
-    -- Add neotest-cypress adapter
-    "your-username/neotest-cypress",
+    "nvim-neotest/nvim-nio",
+    "josewal/neotest-cypress",
   },
   config = function()
     require("neotest").setup({
@@ -52,7 +52,8 @@ use {
   requires = {
     "nvim-lua/plenary.nvim",
     "nvim-treesitter/nvim-treesitter",
-    "your-username/neotest-cypress",
+    "nvim-neotest/nvim-nio",
+    "josewal/neotest-cypress",
   },
   config = function()
     require("neotest").setup({
