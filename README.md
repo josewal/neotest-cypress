@@ -27,42 +27,20 @@ A [NeoTest](https://github.com/nvim-neotest/neotest) adapter for [Cypress](https
 
 ```lua
 {
-  "nvim-neotest/neotest",
-  dependencies = {
-    "nvim-lua/plenary.nvim",
-    "nvim-treesitter/nvim-treesitter",
-    "nvim-neotest/nvim-nio",
-    "josewal/neotest-cypress",
-  },
-  config = function()
-    require("neotest").setup({
-      adapters = {
-        require("neotest-cypress"),
-      },
-    })
-  end,
+    {
+        "josewal/neotest-cypress",
+    },
+    {
+        "nvim-neotest/neotest",
+        opts = {
+            adapters = {
+                ["neotest-cypress"] = {}
+            }
+        },
+    },
 }
-```
 
-### Using [packer.nvim](https://github.com/wbthomason/packer.nvim)
 
-```lua
-use {
-  "nvim-neotest/neotest",
-  requires = {
-    "nvim-lua/plenary.nvim",
-    "nvim-treesitter/nvim-treesitter",
-    "nvim-neotest/nvim-nio",
-    "josewal/neotest-cypress",
-  },
-  config = function()
-    require("neotest").setup({
-      adapters = {
-        require("neotest-cypress"),
-      },
-    })
-  end,
-}
 ```
 
 ## Configuration
