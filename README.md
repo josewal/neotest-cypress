@@ -19,6 +19,24 @@ A [NeoTest](https://github.com/nvim-neotest/neotest) adapter for [Cypress](https
 - [nvim-neotest/neotest](https://github.com/nvim-neotest/neotest)
 - Cypress >= 10.0.0
 
+### Cypress Project Dependencies
+
+This adapter requires the `@cypress/grep` plugin to be installed in your Cypress project for test filtering support.
+
+**Install with npm:**
+```bash
+npm install --save-dev @cypress/grep
+```
+
+**Or with yarn:**
+```bash
+yarn add --dev @cypress/grep
+```
+
+**Note:** The adapter uses Cypress's built-in JSON reporter for test results, so no additional reporter packages are needed.
+
+For complete installation and configuration details, see the [cypress-grep documentation](https://github.com/cypress-io/cypress/tree/develop/npm/grep#readme).
+
 ## Installation
 
 ### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
@@ -38,8 +56,33 @@ A [NeoTest](https://github.com/nvim-neotest/neotest) adapter for [Cypress](https
     },
 }
 
-
 ```
+
+## Configuration
+
+### Cypress Configuration
+
+Your `cypress.config.ts` (or `cypress.config.js`) must include the cypress-grep plugin configuration:
+
+```typescript
+import { defineConfig } from 'cypress';
+
+export default defineConfig({
+  e2e: {
+    setupNodeEvents(on, config) {
+      // Required: cypress-grep plugin for test filtering
+      const { plugin: cypressGrepPlugin } = require('@cypress/grep/plugin');
+      cypressGrepPlugin(config);
+      
+      return config;
+    },
+  },
+});
+```
+
+**Important:** Without cypress-grep properly configured, the adapter will likely still work but will only be able to run entire test files, not individual tests or describe blocks.
+
+For complete installation and configuration details, see the [cypress-grep documentation](https://github.com/cypress-io/cypress/tree/develop/npm/grep#readme).
 
 ## Usage
 
