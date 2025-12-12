@@ -161,8 +161,6 @@ alias test-neocy='LUA_PATH="./tests/mock/?.lua;./tests/mock/?/init.lua;${LUA_PAT
 test-neocy
 ```
 
-**Current test coverage:** 19 unit tests covering configuration, test discovery, test execution, and utility functions.
-
 ## License
 
 MIT
