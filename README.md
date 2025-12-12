@@ -43,22 +43,6 @@ A [NeoTest](https://github.com/nvim-neotest/neotest) adapter for [Cypress](https
 
 ```
 
-## Configuration
-
-The adapter comes with sensible defaults, but you can customize it:
-
-```lua
-require("neotest").setup({
-  adapters = {
-    require("neotest-cypress")({
-      cypress_config_path = "cypress.config.ts", -- or "cypress.config.js"
-      cypress_cmd = "npx cypress",
-      args = { "--headless" },
-    }),
-  },
-})
-```
-
 ## Usage
 
 Once installed, you can use NeoTest commands to run your Cypress tests:
