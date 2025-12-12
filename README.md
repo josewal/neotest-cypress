@@ -17,8 +17,6 @@ A [NeoTest](https://github.com/nvim-neotest/neotest) adapter for [Cypress](https
 
 - Neovim >= 0.9.0
 - [nvim-neotest/neotest](https://github.com/nvim-neotest/neotest)
-- [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter) with JavaScript/TypeScript parsers
-- [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
 - Cypress >= 10.0.0
 
 ## Installation
